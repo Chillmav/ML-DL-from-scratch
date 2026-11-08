@@ -1,3 +1,6 @@
 venv/
 ML/data/
 DL/mnist_multiclass_classification/data
+.venv
+.vscode
+thrash
