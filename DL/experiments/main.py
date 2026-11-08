@@ -5,8 +5,8 @@ import numpy as np
 from DL.utils.one_hot import one_hot
 
 
-df_train = pd.read_csv("DL/mnist_multiclass_clasification/data/MNIST_train.txt")
-df_test = pd.read_csv("DL/mnist_multiclass_clasification/data/MNIST_test.txt")
+df_train = pd.read_csv("DL/data/mnist_train.csv", header=None)
+df_test = pd.read_csv("DL/data/mnist_test.csv", header=None)
 
 data_train = df_train.to_numpy()
 data_test = df_test.to_numpy()

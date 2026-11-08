@@ -3,6 +3,17 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+# TODO:
+
+# conv2d()
+# max_pool2d()
+# avg_pool2d()
+# reshape()
+# flatten()
+# transpose()
+# pad()
+
 class Tensor:
 
     def __init__(self, data, _children=(), _op='', label=''):
