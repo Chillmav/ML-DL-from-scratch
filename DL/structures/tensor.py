@@ -2,6 +2,7 @@ from __future__ import annotations
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.lib.stride_tricks import sliding_window_view
 
 
 # TODO:
@@ -9,10 +10,10 @@ import matplotlib.pyplot as plt
 # conv2d()
 # max_pool2d()
 # avg_pool2d()
-# reshape()
-# flatten()
-# transpose()
-# pad()
+# reshape() # done
+# flatten() # done
+# transpose() # done
+# pad() # done
 
 class Tensor:
 
@@ -107,6 +108,73 @@ class Tensor:
 
         return out
     
+    def reshape(self, size: tuple[int, ...]):
+
+        assert isinstance(size, tuple)
+
+        out = Tensor(self.data.reshape(size), (self, ), "reshape")
+
+        def _backward():
+            self.grad += out.grad.reshape(self.data.shape)
+
+        out._backward = _backward
+
+        return out
+
+    def flatten(self):
+
+        return self.reshape((self.data.shape[0], -1))
+
+    def T(self):
+        out = Tensor(self.data.T, (self, ), "transpose")
+
+        def _backward():
+            self.grad += out.grad.T
+
+        out._backward = _backward
+
+        return out
+
+    def pad(self, p: tuple[int, int] = (1, 1)):
+
+        assert isinstance(p, tuple) and len(p) == 2
+        ph, pw = p
+
+        assert ph >= 0 and pw >= 0
+
+        h_end = -ph if ph > 0 else None
+        w_end = -pw if pw > 0 else None
+
+        new_X = np.zeros(
+            (*self.data.shape[:-2],
+            self.data.shape[-2] + 2 * ph,
+            self.data.shape[-1] + 2 * pw),
+            dtype=self.data.dtype
+        )
+
+        new_X[..., ph:h_end, pw:w_end] = self.data
+
+        out = Tensor(new_X, (self,), "pad")
+
+        def _backward():
+            self.grad += out.grad[..., ph:h_end, pw:w_end]
+
+        out._backward = _backward
+
+        return out
+
+    def max_pool2d(self, size: tuple[int, int]=(2, 2)):
+        assert isinstance(size, tuple) and len(size) == 2
+
+
+    def im2col(self, ker_spatial_size: tuple[int, int] = (1, 1), stride=0):
+
+        y = sliding_window_view(self, ker_spatial_size, axis=(-2, -1))
+        y.transpose(0,2,3,1,4,5)
+        y = y.reshape(y.shape[0]*y.shape[1]*y.shape[2], -1)
+        out = Tensor(y, (self, ), "im2col")
+        def _backward():    
+            pass
     def __pow__(self, other):
 
         assert isinstance(other, (int, float))

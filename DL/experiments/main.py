@@ -19,6 +19,7 @@ X_test = data_test[:, 1:] / 255.0
 
 y_one_hot_train, num_classes = one_hot(y_train)
 
+print(X_train.shape)
 print(y_one_hot_train)
 
 model = MLP(X_train.shape[1], [256, 128, 64, num_classes], activation_function="ReLU")
