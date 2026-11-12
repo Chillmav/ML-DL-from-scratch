@@ -4,17 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from numpy.lib.stride_tricks import sliding_window_view
 
-
-# TODO:
-
-# conv2d()
-# max_pool2d()
-# avg_pool2d()
-# reshape() # done
-# flatten() # done
-# transpose() # done
-# pad() # done
-
 class Tensor:
 
     def __init__(self, data, _children=(), _op='', label=''):
@@ -99,11 +88,15 @@ class Tensor:
         other = other if isinstance(other, Tensor) else Tensor(other) # other -> (n, 1) (weights)
 
         out = Tensor(self.data @ other.data, (self, other), "@")
-
+        # swapaxes i cala ta logika mam na idroo napisane! Basically 3 wymiar komplikuje sprawa, 
+        # wtedy trzeba jedynie zamienic 2 ostatnie ze soba bo batch to 3 wymiar.
+        # w numpy mnozenie macierzy gdy batche sa z przodu so iterpretowane jako niezalezne mnozenie macierzy 
+        # tyle razy ile wynosi batch_size
         def _backward():
-            self.grad += out.grad @ other.data.T # X.grad
-            other.grad += self.data.T @ out.grad # W.grad
-
+            batch_self_grad = out.grad @ np.swapaxes(other.data, -1, -2) # X.grad
+            batch_other_grad = np.swapaxes(self.data, -1, -2) @ out.grad  
+            other.grad += self.reduce_grad(batch_other_grad, other.grad.shape)
+            self.grad += self.reduce_grad(batch_self_grad, self.grad.shape)
         out._backward = _backward
 
         return out
@@ -124,16 +117,6 @@ class Tensor:
     def flatten(self):
 
         return self.reshape((self.data.shape[0], -1))
-
-    def T(self):
-        out = Tensor(self.data.T, (self, ), "transpose")
-
-        def _backward():
-            self.grad += out.grad.T
-
-        out._backward = _backward
-
-        return out
 
     def pad(self, p: tuple[int, int] = (1, 1)):
 
@@ -185,7 +168,7 @@ class Tensor:
             upstream = upstream.transpose(0, 2, 1)[..., None] # nie wstawia None tylko dodaje nowy wymiar
             # nie musze liczyc self.grad bo juz jest liczony w self.im2col
             np.put_along_axis(contributions, max_indices, upstream, axis=-1)
-            self.im2col.grad += contributions.reshape(im2col_rep.data.shape)
+            im2col_rep.grad += contributions.reshape(im2col_rep.data.shape)
         out._backward = _backward
 
         return out
@@ -211,7 +194,53 @@ class Tensor:
         out._backward = _backward
 
         return out
+
+    def conv2d(self, other: Tensor, stride: int=1): # other means kernel
+
+        B, C_in, H, W = self.data.shape
+        C_out, C_kernel, kh, kw = other.data.shape
+
+        assert C_in == C_kernel
+        assert H >= kh and W >= kw
+        assert stride > 0
+
+        H_out = (H - kh) // stride + 1
+        W_out = (W - kw) // stride + 1
+
+        im2col_rep = self.im2col((other.data.shape[-2], other.data.shape[-1]), stride)
+
+        other_reshaped = other.reshape((other.data.shape[0], -1)).transpose()
+
+        mat_multiplied = im2col_rep.__matmul__(other_reshaped)
+
+        out = mat_multiplied.reshape((self.data.shape[0], H_out, W_out, -1)).transpose((0, -1, 1, 2))
+        
+        return out
+
+    def transpose(self, axes: tuple[int, ...]=None): # w numpy .T odwraca kolejnosc wszystkich osi
+
+        if axes is None:
+
+            out = Tensor(self.data.T, (self, ), "transpose")
+            def _backward():
+                        self.grad += out.grad.T
+            
+            out._backward = _backward
+
+        else: 
+            assert len(self.data.shape) == len(axes)
     
+            out = Tensor(self.data.transpose(axes), (self, ), "transpose")
+
+            inverse_axes = np.argsort(axes)
+            def _backward():
+
+                self.grad += out.grad.transpose(inverse_axes)
+
+            out._backward = _backward
+
+        return out
+        
     def __pow__(self, other):
 
         assert isinstance(other, (int, float))
