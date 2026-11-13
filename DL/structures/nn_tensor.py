@@ -80,14 +80,15 @@ class MLP:
     
     def MSE(self, y_real, y_hat: Tensor):
 
-        return ((y_hat - y_real)**2).sum() / len(y_real.data)
+
+        return ((y_hat - y_real)**2).sum() / y_real.data.size
     
     def BCE(self, y_real, y_hat: Tensor): # Binary Cross Entropy
 
         eps = 1e-8
         y_hat = y_hat * (1 - 2*eps) + eps
 
-        return -(y_real * y_hat.log() + (1 - y_real) * (1 - y_hat).log()).sum() / y_real.data.shape[0]
+        return -(y_real * y_hat.log() + (1 - y_real) * (1 - y_hat).log()).sum() / y_real.data.size
     
     def MCE(self, y_real, logits: Tensor): # Multiclass Cross Entropy
 

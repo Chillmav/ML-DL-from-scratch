@@ -229,7 +229,11 @@ class Tensor:
 
         else: 
             assert len(self.data.shape) == len(axes)
-    
+            assert np.array(axes).all() >= -1
+            axes = list(axes)
+            if -1 in axes:
+                axes[axes.index(-1)] = max(axes) + 1
+
             out = Tensor(self.data.transpose(axes), (self, ), "transpose")
 
             inverse_axes = np.argsort(axes)
