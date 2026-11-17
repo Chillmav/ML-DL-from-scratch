@@ -338,8 +338,8 @@ class Tensor:
         if axis==1:
             out = Tensor(np.sum(self.data, axis=1, keepdims=True), (self, ), "sum, axis=1")
         
-            def _backward():
-                self.grad += np.repeat(out.grad, self.grad.shape[1], axis=1)
+        def _backward():
+            self.grad += np.broadcast_to(out.grad, self.data.shape)
 
             out._backward = _backward
 

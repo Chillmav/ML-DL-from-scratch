@@ -479,6 +479,7 @@ def test_transpose_backward(shape, axes, loss_function):
     "sum",
     "weighted_sum"
 ])
+
 def test_sum_backward(shape, axis, loss_function):
 
     X = np.random.rand(*shape)
@@ -487,18 +488,18 @@ def test_sum_backward(shape, axis, loss_function):
     X_torch_tensor = torch.tensor(X.copy(), requires_grad=True, dtype=torch.float64)
 
     Y_tensor = X_tensor.sum(axis=axis)
-    Y_torch_tensor = X_torch_tensor.sum(axis=axis)
+    Y_torch_tensor = X_torch_tensor.sum(dim=axis, keepdim=(axis is not None))
 
     # Backward
     if loss_function == "sum":
 
         Y_tensor.sum().backward()
         Y_torch_tensor.sum().backward()
-
+        
     elif loss_function == "weighted_sum":
-        W = np.random.rand(*Z.data.shape)
+        W = np.random.rand(*Y_tensor.data.shape)
         (Y_tensor * W).sum().backward()
-        (Y_torch_tensor * torch.tensor(W)).sum().backward()
+        (Y_torch_tensor * torch.tensor(W, dtype=torch.float64)).sum().backward()
     
     np.testing.assert_allclose(
         X_tensor.grad,
@@ -565,8 +566,13 @@ def test_im2col_backward(shape, kernel_size, stride, loss_function):
     X_torch_tensor = torch.tensor(X.copy(), requires_grad=True, dtype=torch.float64)
 
     Y_tensor = X_tensor.im2col(ker_spatial_size=kernel_size, stride=stride)
-    Y_torch_tensor = torch.nn.functional.unfold(X_torch_tensor, kernel_size=kernel_size, stride=stride)
+    Y_torch_tensor = torch.nn.functional.unfold(
+    X_torch_tensor,
+    kernel_size=kernel_size,
+    stride=stride
+).transpose(1, 2)
 
+    print(Y_tensor.data.shape, Y_torch_tensor.shape)
     # Backward
     if loss_function == "sum":
 
@@ -712,4 +718,93 @@ def test_conv2d_backward(shape, kernel_size, out_channels, stride, loss_function
         K_torch_tensor.grad.numpy(),
         rtol=1e-6,
         atol=1e-8
+    )
+
+@pytest.mark.parametrize("shape, kernel_size, out_channels, padding, stride", [
+    # Single channel, single filter
+    ((1, 1, 5, 5), (3, 3), 1, (1, 1), 1),
+
+    # Multiple input and output channels
+    ((1, 3, 10, 10), (3, 3), 8, (2, 2), 1),
+
+    # Multiple batches
+    ((4, 3, 12, 12), (3, 3), 8, (1, 1), 1),
+
+    # Stride 2
+    ((2, 3, 8, 8), (2, 2), 4, (1, 1), 2),
+
+    # 1x1 convolution
+    ((2, 16, 8, 8), (1, 1), 32, (1, 1), 1),
+
+    # Kernel equal to input dimensions
+    ((1, 3, 5, 5), (5, 5), 2, (2, 2), 1),
+
+    # Larger batch
+    ((8, 16, 16, 16), (3, 3), 32, (2, 2), 1),
+])
+@pytest.mark.parametrize("loss_function", [
+    "sum",
+    "weighted_sum"
+])
+
+def test_conv_layer_backward(shape, kernel_size, out_channels, stride, padding, loss_function):
+    # pad => conv2d => ReLU => maxPool
+
+    B, C_in, H, W = shape
+    
+    X = np.random.rand(B, C_in, H, W)
+    K = np.random.rand(out_channels, C_in, kernel_size[0], kernel_size[1])
+
+    X_tensor = Tensor(X.copy())
+    K_tensor = Tensor(K.copy())
+
+    X_torch_tensor = torch.tensor(X.copy(), dtype=torch.float64, requires_grad=True)
+    K_torch_tensor = torch.tensor(K.copy(), dtype=torch.float64, requires_grad=True)
+
+    X_pad = X_tensor.pad(padding)
+    X_conv = X_pad.conv2d(K_tensor, stride)
+    X_relu = X_conv.relu()
+    Y_tensor = X_relu.max_pool2d(kernel_size[0])
+
+    Y_torch_tensor = torch.nn.functional.max_pool2d(
+    torch.relu(
+        torch.nn.functional.conv2d(
+            X_torch_tensor,
+            K_torch_tensor,
+            stride=stride,
+            padding=padding
+        )
+    ),
+    kernel_size=kernel_size[0],
+    stride=kernel_size[0]
+)
+
+    # Backward
+    if loss_function == "sum":
+
+        Y_tensor.sum().backward()
+        Y_torch_tensor.sum().backward()
+
+    elif loss_function == "weighted_sum":
+        W = np.random.rand(*Y_tensor.data.shape)
+        (Y_tensor * W).sum().backward()
+        (Y_torch_tensor * torch.tensor(W)).sum().backward()
+        
+    np.testing.assert_allclose(
+    Y_tensor.data,
+    Y_torch_tensor.detach().numpy(),
+    rtol=1e-6,
+    atol=1e-8
+)
+    np.testing.assert_allclose(
+        X_tensor.grad,
+        X_torch_tensor.grad.numpy(),
+        rtol=1e-5,
+        atol=1e-6
+    )
+    np.testing.assert_allclose(
+        K_tensor.grad,
+        K_torch_tensor.grad.numpy(),
+        rtol=1e-5,
+        atol=1e-6
     )
