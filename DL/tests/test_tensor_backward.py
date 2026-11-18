@@ -1,6 +1,5 @@
 import pytest
 from DL.structures.tensor import Tensor
-from DL.structures.nn_tensor import MLP
 import numpy as np
 import torch
 

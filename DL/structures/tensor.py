@@ -195,19 +195,23 @@ class Tensor:
 
         return out
 
-    def conv2d(self, other: Tensor, stride: int=1): # other means kernel
+    def conv2d(self, other: Tensor, stride: int=1, padding: tuple[int, ...]=(1, 1)): # other means kernel
 
         B, C_in, H, W = self.data.shape
         C_out, C_kernel, kh, kw = other.data.shape
+        ph, pw = padding
 
         assert C_in == C_kernel
-        assert H >= kh and W >= kw
+        assert ph >= 0 and pw >= 0
+        assert H + 2 * ph >= kh and W + 2 * pw >= kw
         assert stride > 0
 
-        H_out = (H - kh) // stride + 1
-        W_out = (W - kw) // stride + 1
+        H_out = (H + 2 * ph - kh) // stride + 1
+        W_out = (W + 2 * pw - kw) // stride + 1
 
-        im2col_rep = self.im2col((other.data.shape[-2], other.data.shape[-1]), stride)
+        padded = self.pad(padding)
+
+        im2col_rep = padded.im2col((other.data.shape[-2], other.data.shape[-1]), stride)
 
         other_reshaped = other.reshape((other.data.shape[0], -1)).transpose()
 

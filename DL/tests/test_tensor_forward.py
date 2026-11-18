@@ -235,41 +235,52 @@ def test_im2col(shape, kernel_size, stride):
         expected
     )
 
-@pytest.mark.parametrize("shape, kernel_size, out_channels, stride", [
-    ((1, 1, 5, 5), (3, 3), 1, 1),
-    ((1, 3, 10, 10), (3, 3), 8, 1),
-    ((2, 3, 8, 8), (2, 2), 4, 2),
-    ((1, 1, 7, 9), (2, 3), 2, 1),
+@pytest.mark.parametrize("shape, kernel_size, out_channels, stride, padding", [
+    ((1, 1, 5, 5), (3, 3), 1, 1, (1, 1)),
+    ((1, 3, 10, 10), (3, 3), 8, 1, (2, 2)),
+    ((2, 3, 8, 8), (2, 2), 4, 2, (1, 1)),
+    ((1, 1, 7, 9), (2, 3), 2, 1, (2, 2)),
 ])
-def test_conv2d(shape, kernel_size, out_channels, stride):
+def test_conv2d(shape, kernel_size, out_channels, stride, padding):
     rng = np.random.default_rng(42)
 
     data = rng.random(shape)
+
     B, C, H, W = shape
     kh, kw = kernel_size
+    ph, pw = padding
 
-    kernel = rng.random((C * kh * kw, out_channels))
+    kernel = rng.random((out_channels, C, kh, kw))
 
-    H_out = (H - kh) // stride + 1
-    W_out = (W - kw) // stride + 1
+    H_out = (H + 2 * ph - kh) // stride + 1
+    W_out = (W + 2 * pw - kw) // stride + 1
 
-    expected = np.empty((B, H_out * W_out, out_channels))
+    padded_data = np.pad(
+        data,
+        ((0, 0), (0, 0), (ph, ph), (pw, pw)),
+        mode="constant"
+    )
+
+    expected = np.empty((B, out_channels, H_out, W_out))
 
     for b in range(B):
         for h in range(H_out):
             for w in range(W_out):
-                window = data[
+                window = padded_data[
                     b,
                     :,
                     h * stride:h * stride + kh,
                     w * stride:w * stride + kw
                 ]
 
-                expected[b, h * W_out + w] = (
-                    window.flatten() @ kernel
-                )
+                for c_out in range(out_channels):
+                    expected[b, c_out, h, w] = np.sum(
+                        window * kernel[c_out]
+                    )
 
-    actual = Tensor(data).conv2d(Tensor(kernel), stride).data
+    actual = Tensor(data).conv2d(
+        Tensor(kernel), stride, padding
+    ).data
 
     assert np.allclose(actual, expected)
 
